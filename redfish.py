@@ -1,5 +1,16 @@
-import requests
+import sys
 import time
+import subprocess
+import json
+import base64
+import argparse
+
+try:
+    import requests
+except ImportError:
+    print("Error: 'requests' module not found. Please install it using 'pip install requests'")
+    sys.exit(1)
+
 
 class RedfishClient:
     def __init__(self, base_url, username, password):
@@ -11,6 +22,7 @@ class RedfishClient:
     def login(self):
         try:
             self.session = requests.Session()
+            self.session.verify = False
             self.session.auth = (self.username, self.password)
             self.session.headers.update({"Content-Type": "application/json"})
             response = self.session.get(self.base_url)
@@ -196,5 +208,127 @@ class RedfishClient:
         except requests.exceptions.RequestException as e:
             print(f"Error getting Security State: {e}")
             return None
+
+
+def get_server_details(server_name):
+    try:
+        # Get server details
+        cmd = ["kubectl", "get", f"server/{server_name}", "-n", "gpc-system", "-o", "json"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        server_data = json.loads(result.stdout)
+        
+        ip = server_data.get('spec', {}).get('bmc', {}).get('ip')
+        secret_name = server_data.get('spec', {}).get('bmc', {}).get('credentialsRef', {}).get('name')
+        
+        if not ip or not secret_name:
+            print(f"Error: Could not find IP or credentialsRef for server {server_name}")
+            return None, None, None
+
+        # Get secret details
+        cmd_secret = ["kubectl", "get", "secret", secret_name, "-n", "gpc-system", "-o", "json"]
+        result_secret = subprocess.run(cmd_secret, capture_output=True, text=True, check=True)
+        secret_data = json.loads(result_secret.stdout)
+        
+        username_b64 = secret_data.get('data', {}).get('username')
+        password_b64 = secret_data.get('data', {}).get('password')
+        
+        if not username_b64 or not password_b64:
+             print(f"Error: Could not find username or password in secret {secret_name}")
+             return None, None, None
+
+        username = base64.b64decode(username_b64).decode('utf-8')
+        password = base64.b64decode(password_b64).decode('utf-8')
+        
+        return ip, username, password
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running kubectl: {e}")
+        return None, None, None
+    except Exception as e:
+         print(f"Error processing server details: {e}")
+         return None, None, None
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Redfish Client Utility")
+    parser.add_argument("server_name", help="Name of the server to connect to (via kubectl)")
+    parser.add_argument("--action", required=True, help="Action to perform", choices=[
+        "get_power_state", "reset_system", "power_on", "graceful_shutdown", "force_off", "force_restart",
+        "wait_for_power_state", "reset_manager", "factory_reset", "aux_cycle", "get_post_state",
+        "secure_erase", "get_secure_erase_status", "get_eskm_logs", "test_eskm_connection",
+        "get_security_state", "get_server_config_lock_settings"
+    ])
+    parser.add_argument("--system-id", default="1", help="System ID (default: 1)")
+    parser.add_argument("--manager-id", default="1", help="Manager ID (default: 1)")
+    parser.add_argument("--reset-type", help="Reset Type for reset_system or reset_manager")
+    parser.add_argument("--target-state", help="Target Power State for wait_for_power_state")
+    parser.add_argument("--timeout", type=int, default=60, help="Timeout in seconds (default: 60)")
+    parser.add_argument("--interval", type=int, default=5, help="Interval in seconds (default: 5)")
+    
+    args = parser.parse_args()
+
+    ip, username, password = get_server_details(args.server_name)
+    
+    if ip and username and password:
+        # Suppress insecure request warnings
+        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        
+        base_url = f"https://{ip}"
+        client = RedfishClient(base_url, username, password)
+        
+        if client.login():
+            try:
+                result = None
+                if args.action == "get_power_state":
+                    result = client.get_power_state(args.system_id)
+                elif args.action == "reset_system":
+                    if not args.reset_type:
+                        print("Error: --reset-type is required for reset_system")
+                    else:
+                        result = client.reset_system(args.reset_type, args.system_id)
+                elif args.action == "power_on":
+                    result = client.power_on(args.system_id)
+                elif args.action == "graceful_shutdown":
+                    result = client.graceful_shutdown(args.system_id)
+                elif args.action == "force_off":
+                    result = client.force_off(args.system_id)
+                elif args.action == "force_restart":
+                    result = client.force_restart(args.system_id)
+                elif args.action == "wait_for_power_state":
+                    if not args.target_state:
+                         print("Error: --target-state is required for wait_for_power_state")
+                    else:
+                        result = client.wait_for_power_state(args.target_state, args.system_id, args.timeout, args.interval)
+                elif args.action == "reset_manager":
+                    # Default reset type handled in method if not provided, but here we can pass it if provided
+                    rt = args.reset_type if args.reset_type else "ForceRestart"
+                    result = client.reset_manager(rt, args.manager_id)
+                elif args.action == "factory_reset":
+                    result = client.factory_reset(args.manager_id)
+                elif args.action == "aux_cycle":
+                    result = client.aux_cycle(args.system_id)
+                elif args.action == "get_post_state":
+                    result = client.get_post_state(args.system_id)
+                elif args.action == "secure_erase":
+                    result = client.secure_erase(args.system_id)
+                elif args.action == "get_secure_erase_status":
+                    result = client.get_secure_erase_status(args.system_id)
+                elif args.action == "get_eskm_logs":
+                    result = client.get_eskm_logs(args.manager_id)
+                elif args.action == "test_eskm_connection":
+                    result = client.test_eskm_connection(args.manager_id)
+                elif args.action == "get_security_state":
+                    result = client.get_security_state(args.manager_id)
+                elif args.action == "get_server_config_lock_settings":
+                    result = client.get_server_config_lock_settings(args.system_id)
+                
+                print(json.dumps(result, indent=2))
+            finally:
+                client.logout()
+        else:
+            print("Login failed.")
+            sys.exit(1)
+    else:
+        print("Failed to retrieve server details.")
+        sys.exit(1)
 
 

@@ -1,4 +1,6 @@
 import sys
+import json
+import base64
 from unittest.mock import MagicMock
 
 # Mock requests module before importing redfish
@@ -183,6 +185,30 @@ class TestRedfishClient(unittest.TestCase):
         state = self.client.get_security_state()
         self.assertEqual(state, 'Production')
         self.client.session.get.assert_called_with("http://mock.url/redfish/v1/Managers/1/SecurityService")
+
+
+    def test_get_get_server_details(self):
+        with unittest.mock.patch('subprocess.run') as mock_run:
+            # Mock get server
+            mock_run.side_effect = [
+                MagicMock(stdout=json.dumps({
+                    'spec': {'bmc': {'ip': '1.2.3.4', 'credentialsRef': {'name': 'secret-name'}}}
+                })),
+                # Mock get secret
+                MagicMock(stdout=json.dumps({
+                    'data': {
+                        'username': base64.b64encode(b'user').decode('utf-8'),
+                        'password': base64.b64encode(b'pass').decode('utf-8')
+                    }
+                }))
+            ]
+            
+            from redfish import get_server_details
+            ip, user, password = get_server_details("server1")
+            
+            self.assertEqual(ip, '1.2.3.4')
+            self.assertEqual(user, 'user')
+            self.assertEqual(password, 'pass')
 
 if __name__ == '__main__':
     unittest.main()
