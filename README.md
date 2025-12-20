@@ -12,12 +12,20 @@ Key features:
 - **Extensible Architecture**: Maps CLI actions to `RedfishClient` methods.
 - **Robust Error Handling**:Gracefully handles missing dependencies and connection errors.
 
+## Prerequisites
+- Python 3 with `requests` installed (`pip install requests`)
+- `kubectl` installed and configured to access the cluster.
+
+## Environment Variables
+- `KUBECONFIG`: Can be set to specify the path to the kubeconfig file. If not set, it defaults to `/root/release/root-admin/root-admin-kubeconfig` and prints a warning.
+
 ## Arguments
 
 | Argument | Required | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `server_name` | Yes | N/A | Name of the server resource in `gpc-system` namespace. |
-| `--action` | Yes | N/A | The operation to perform. See usages below. |
+| `--server-name` | Conditional | N/A | Name of the server. Required if not using `--list-servers`. |
+| `--list-servers` | No | `False` | Lists available servers with IPs. |
+| `--action` | Conditional | N/A | The operation to perform. Required if not using `--list-servers`. |
 | `--system-id` | No | `1` | The functionality ID of the system (e.g. `Systems/1`). |
 | `--manager-id` | No | `1` | The ID of the manager (e.g. `Managers/1`). |
 | `--reset-type` | Conditional | N/A | Required for `reset_system` and optional for `reset_manager`. |
@@ -27,95 +35,98 @@ Key features:
 
 ## Help / Usage Examples
 
-Below are examples for all supported actions. Replace `<server-name>` with your actual server name.
+**List Servers**
+```bash
+python3 redfish.py --list-servers
+```
 
 ### Power Management
 
 **Get Power State**
 ```bash
-python3 redfish.py <server-name> --action get_power_state
+python3 redfish.py --server-name <server-name> --action get_power_state
 ```
 
 **Power On**
 ```bash
-python3 redfish.py <server-name> --action power_on
+python3 redfish.py --server-name <server-name> --action power_on
 ```
 
 **Graceful Shutdown**
 ```bash
-python3 redfish.py <server-name> --action graceful_shutdown
+python3 redfish.py --server-name <server-name> --action graceful_shutdown
 ```
 
 **Force Off**
 ```bash
-python3 redfish.py <server-name> --action force_off
+python3 redfish.py --server-name <server-name> --action force_off
 ```
 
 **Force Restart**
 ```bash
-python3 redfish.py <server-name> --action force_restart
+python3 redfish.py --server-name <server-name> --action force_restart
 ```
 
 **Reset System (Custom Type)**
 ```bash
-python3 redfish.py <server-name> --action reset_system --reset-type On
+python3 redfish.py --server-name <server-name> --action reset_system --reset-type On
 ```
 
 **Wait for Power State**
 ```bash
-python3 redfish.py <server-name> --action wait_for_power_state --target-state On --timeout 120
+python3 redfish.py --server-name <server-name> --action wait_for_power_state --target-state On --timeout 120
 ```
 
 ### Advanced Reset
 
 **Reset Manager (BMC)**
 ```bash
-python3 redfish.py <server-name> --action reset_manager --reset-type ForceRestart
+python3 redfish.py --server-name <server-name> --action reset_manager --reset-type ForceRestart
 ```
 
 **Factory Reset (Manager)**
 ```bash
-python3 redfish.py <server-name> --action factory_reset
+python3 redfish.py --server-name <server-name> --action factory_reset
 ```
 
 **Aux Cycle (Power Cycle Machine & iLO)**
 ```bash
-python3 redfish.py <server-name> --action aux_cycle
+python3 redfish.py --server-name <server-name> --action aux_cycle
 ```
 
 **Secure Erase**
 ```bash
-python3 redfish.py <server-name> --action secure_erase
+python3 redfish.py --server-name <server-name> --action secure_erase
 ```
 
 **Get Secure Erase Status**
 ```bash
-python3 redfish.py <server-name> --action get_secure_erase_status
+python3 redfish.py --server-name <server-name> --action get_secure_erase_status
 ```
 
 **Get POST State**
 ```bash
-python3 redfish.py <server-name> --action get_post_state
+python3 redfish.py --server-name <server-name> --action get_post_state
 ```
 
 ### Security & Logs
 
 **Get ESKM Logs**
 ```bash
-python3 redfish.py <server-name> --action get_eskm_logs
+python3 redfish.py --server-name <server-name> --action get_eskm_logs
 ```
 
 **Test ESKM Connection**
 ```bash
-python3 redfish.py <server-name> --action test_eskm_connection
+python3 redfish.py --server-name <server-name> --action test_eskm_connection
 ```
 
 **Get Security State**
 ```bash
-python3 redfish.py <server-name> --action get_security_state
+python3 redfish.py --server-name <server-name> --action get_security_state
 ```
 
 **Get Server Config Lock Settings**
 ```bash
-python3 redfish.py <server-name> --action get_server_config_lock_settings
+python3 redfish.py --server-name <server-name> --action get_server_config_lock_settings
 ```

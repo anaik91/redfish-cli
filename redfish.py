@@ -4,6 +4,7 @@ import subprocess
 import json
 import base64
 import argparse
+import os
 
 try:
     import requests
@@ -25,11 +26,15 @@ class RedfishClient:
             self.session.verify = False
             self.session.auth = (self.username, self.password)
             self.session.headers.update({"Content-Type": "application/json"})
-            response = self.session.get(self.base_url)
+            response = self.session.get(f"{self.base_url}/redfish/v1/")
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
             print(f"Error logging in: {e}")
+            return None
+        except ValueError as e:
+            print(f"Error decoding login response: {e}")
+            print(f"Response content: {response.text}")
             return None
 
     def logout(self):
@@ -248,10 +253,42 @@ def get_server_details(server_name):
          print(f"Error processing server details: {e}")
          return None, None, None
 
+
+def list_servers():
+    try:
+        cmd = ["kubectl", "get", "servers", "-n", "gpc-system", "-o", "json"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+        
+        print(f"{'NAME':<30} {'MANAGEMENT IP':<20} {'BMC IP':<20}")
+        print("-" * 72)
+        
+        for item in data.get('items', []):
+            name = item.get('metadata', {}).get('name', 'N/A')
+            
+            mgmt_ips = item.get('spec', {}).get('managementNetwork', {}).get('ips', [])
+            mgmt_ip = mgmt_ips[0] if mgmt_ips else 'N/A'
+            
+            bmc_ip = item.get('spec', {}).get('bmc', {}).get('ip', 'N/A')
+            
+            print(f"{name:<30} {mgmt_ip:<20} {bmc_ip:<20}")
+            
+    except subprocess.CalledProcessError as e:
+        print(f"Error listing servers: {e}")
+    except Exception as e:
+        print(f"Error processing server list: {e}")
+
 if __name__ == "__main__":
+    if os.environ.get('KUBECONFIG'):
+        print(f"KUBECONFIG is set to: {os.environ['KUBECONFIG']}")
+    else:
+        print("Warning: KUBECONFIG is not specified. Setting default to /root/release/root-admin/root-admin-kubeconfig")
+        os.environ['KUBECONFIG'] = "/root/release/root-admin/root-admin-kubeconfig"
+
     parser = argparse.ArgumentParser(description="Redfish Client Utility")
-    parser.add_argument("server_name", help="Name of the server to connect to (via kubectl)")
-    parser.add_argument("--action", required=True, help="Action to perform", choices=[
+    parser.add_argument("--server-name", help="Name of the server to connect to (via kubectl)")
+    parser.add_argument("--list-servers", action="store_true", help="List available servers with IPs")
+    parser.add_argument("--action", help="Action to perform", choices=[
         "get_power_state", "reset_system", "power_on", "graceful_shutdown", "force_off", "force_restart",
         "wait_for_power_state", "reset_manager", "factory_reset", "aux_cycle", "get_post_state",
         "secure_erase", "get_secure_erase_status", "get_eskm_logs", "test_eskm_connection",
@@ -265,6 +302,18 @@ if __name__ == "__main__":
     parser.add_argument("--interval", type=int, default=5, help="Interval in seconds (default: 5)")
     
     args = parser.parse_args()
+
+    if args.list_servers:
+        list_servers()
+        sys.exit(0)
+    
+    if not args.server_name:
+        print("Error: --server-name is required unless --list-servers is used.")
+        sys.exit(1)
+        
+    if not args.action:
+        print("Error: --action is required.")
+        sys.exit(1)
 
     ip, username, password = get_server_details(args.server_name)
     

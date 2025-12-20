@@ -210,5 +210,35 @@ class TestRedfishClient(unittest.TestCase):
             self.assertEqual(user, 'user')
             self.assertEqual(password, 'pass')
 
+
+    def test_list_servers(self):
+        with unittest.mock.patch('subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(stdout=json.dumps({
+                "items": [
+                    {
+                        "metadata": {"name": "server1"},
+                        "spec": {
+                            "managementNetwork": {"ips": ["1.1.1.1"]},
+                            "bmc": {"ip": "2.2.2.2"}
+                        }
+                    }
+                ]
+            }))
+            
+            from redfish import list_servers
+            # Capture print output
+            from io import StringIO
+            captured_output = StringIO()
+            sys.stdout = captured_output
+            try:
+                list_servers()
+            finally:
+                sys.stdout = sys.__stdout__
+            
+            output = captured_output.getvalue()
+            self.assertIn("server1", output)
+            self.assertIn("1.1.1.1", output)
+            self.assertIn("2.2.2.2", output)
+
 if __name__ == '__main__':
     unittest.main()
