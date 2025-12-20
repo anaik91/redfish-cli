@@ -12,6 +12,12 @@ Key features:
 - **Extensible Architecture**: Maps CLI actions to `RedfishClient` methods.
 - **Robust Error Handling**:Gracefully handles missing dependencies and connection errors.
 
+## Installation / Building Binary
+To create a standalone binary executable, you can use `PyInstaller`.
+1. Install PyInstaller: `pip install pyinstaller`
+2. Build the binary: `pyinstaller --onefile redfish.py`
+3. The executable will be available in `dist/redfish`.
+
 ## Prerequisites
 - Python 3 with `requests` installed (`pip install requests`)
 - `kubectl` installed and configured to access the cluster.
