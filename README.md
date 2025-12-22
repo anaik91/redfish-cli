@@ -44,6 +44,19 @@ To ensure the binary works across different Linux distributions (e.g., Debian, U
 | `--timeout` | No | `60` | Timeout in seconds for wait operations. |
 | `--interval` | No | `5` | Polling interval in seconds for wait operations. |
 | `-v` | No | `false` | Enable verbose logging. |
+| `--yes` / `-y` | No | `false` | Assume "yes" to all safety prompts (non-interactive mode). |
+
+## Safety Feature
+For any operation that modifies server state (HTTP `POST`), the utility will prompt for confirmation:
+```text
+--- SAFETY CONFIRMATION ---
+Method:  POST
+URL:     https://<ip>/redfish/v1/Systems/1/Actions/ComputerSystem.Reset
+Payload: {"ResetType":"On"}
+---------------------------
+Proceed? (y/N): 
+```
+Use `--yes` or `-y` to skip this prompt for scripts or CI/CD.
 
 ## Help / Usage Examples
 

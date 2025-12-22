@@ -17,10 +17,11 @@ import (
 
 // RedfishClient handles communication with the Redfish API
 type RedfishClient struct {
-	BaseURL  string
-	Username string
-	Password string
-	Client   *http.Client
+	BaseURL   string
+	Username  string
+	Password  string
+	Client    *http.Client
+	AssumeYes bool
 }
 
 // loggingTransport wraps an http.RoundTripper and logs requests and responses
@@ -40,7 +41,7 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 // NewRedfishClient creates a new Redfish client with an insecure TLS configuration
-func NewRedfishClient(baseURL, username, password string, verbose bool) *RedfishClient {
+func NewRedfishClient(baseURL, username, password string, verbose, assumeYes bool) *RedfishClient {
 	var tr http.RoundTripper = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -50,9 +51,10 @@ func NewRedfishClient(baseURL, username, password string, verbose bool) *Redfish
 	}
 
 	return &RedfishClient{
-		BaseURL:  baseURL,
-		Username: username,
-		Password: password,
+		BaseURL:   baseURL,
+		Username:  username,
+		Password:  password,
+		AssumeYes: assumeYes,
 		Client: &http.Client{
 			Transport: tr,
 			Timeout:   30 * time.Second,
@@ -63,12 +65,34 @@ func NewRedfishClient(baseURL, username, password string, verbose bool) *Redfish
 // DoRequest performs an HTTP request with retries and basic auth
 func (c *RedfishClient) DoRequest(method, url string, payload interface{}) ([]byte, error) {
 	var body io.Reader
+	var jsonBody []byte
+	var err error
+
 	if payload != nil {
-		jsonBody, err := json.Marshal(payload)
+		jsonBody, err = json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling payload: %v", err)
 		}
 		body = bytes.NewBuffer(jsonBody)
+	}
+
+	if method == "POST" && !c.AssumeYes {
+		fmt.Printf("\n--- SAFETY CONFIRMATION ---\n")
+		fmt.Printf("Method:  %s\n", method)
+		fmt.Printf("URL:     %s\n", url)
+		if jsonBody != nil {
+			fmt.Printf("Payload: %s\n", string(jsonBody))
+		} else {
+			fmt.Printf("Payload: <empty>\n")
+		}
+		fmt.Printf("---------------------------\n")
+		fmt.Print("Proceed? (y/N): ")
+
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			return nil, fmt.Errorf("action cancelled by user")
+		}
 	}
 
 	var lastErr error
@@ -486,6 +510,8 @@ func main() {
 	targetState := flag.String("target-state", "", "Target Power State for wait_for_power_state")
 	timeout := flag.Int("timeout", 60, "Timeout in seconds (default: 60)")
 	interval := flag.Int("interval", 5, "Interval in seconds (default: 5)")
+	assumeYes := flag.Bool("y", false, "Assume yes; assume 'y' as answer to all prompts and run non-interactively")
+	flag.BoolVar(assumeYes, "yes", false, "Assume yes; assume 'y' as answer to all prompts and run non-interactively")
 
 	flag.Parse()
 
@@ -514,7 +540,7 @@ func main() {
 	}
 
 	baseURL := fmt.Sprintf("https://%s", ip)
-	client := NewRedfishClient(baseURL, user, pass, *verbose)
+	client := NewRedfishClient(baseURL, user, pass, *verbose, *assumeYes)
 
 	if _, err := client.Login(); err != nil {
 		fmt.Printf("Login failed: %v\n", err)
