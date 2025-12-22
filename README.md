@@ -13,10 +13,14 @@ Key features:
 - **Portability**: Compiled to a single static binary for easy distribution.
 - **Robust Error Handling**: Gracefully handles missing credentials and connection errors.
 
-## Building Binary
-To create a standalone binary executable, ensure you have Go installed:
+## Building Portable Binary (Static Linking)
+To ensure the binary works across different Linux distributions (e.g., Debian, Ubuntu) without `glibc` version errors, build it as a static binary:
+
 1. Initialize/Audit dependencies: `go mod tidy`
-2. Build the binary: `go build -o redfish-cli`
+2. Build the static binary:
+   ```bash
+   CGO_ENABLED=0 go build -ldflags="-extldflags=-static" -o redfish-cli
+   ```
 3. The executable will be available as `./redfish-cli`.
 
 ## Prerequisites
@@ -32,7 +36,7 @@ To create a standalone binary executable, ensure you have Go installed:
 | :--- | :--- | :--- | :--- |
 | `--server-name` | Conditional | N/A | Name of the server. Required if not using `--list-servers`. |
 | `--list-servers` | No | `false` | Lists available servers with IPs. |
-| `--action` | Conditional | N/A | The operation to perform. Required if not using `--list-servers`. |
+| `--action` | Conditional | N/A | The operation to perform (e.g., `power_on`, `get_power_state`). See help for full list. |
 | `--system-id` | No | `1` | The functionality ID of the system (e.g. `Systems/1`). |
 | `--manager-id` | No | `1` | The ID of the manager (e.g. `Managers/1`). |
 | `--reset-type` | Conditional | N/A | Required for `reset_system` and optional for `reset_manager`. |
