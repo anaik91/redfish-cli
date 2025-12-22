@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"time"
@@ -22,11 +23,32 @@ type RedfishClient struct {
 	Client   *http.Client
 }
 
+// loggingTransport wraps an http.RoundTripper and logs requests and responses
+type loggingTransport struct {
+	transport http.RoundTripper
+}
+
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	dump, _ := httputil.DumpRequestOut(req, true)
+	fmt.Printf("\n--- Request ---\n%s\n", string(dump))
+	resp, err := t.transport.RoundTrip(req)
+	if err == nil {
+		dump, _ = httputil.DumpResponse(resp, true)
+		fmt.Printf("\n--- Response ---\n%s\n----------------\n", string(dump))
+	}
+	return resp, err
+}
+
 // NewRedfishClient creates a new Redfish client with an insecure TLS configuration
-func NewRedfishClient(baseURL, username, password string) *RedfishClient {
-	tr := &http.Transport{
+func NewRedfishClient(baseURL, username, password string, verbose bool) *RedfishClient {
+	var tr http.RoundTripper = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+
+	if verbose {
+		tr = &loggingTransport{transport: tr}
+	}
+
 	return &RedfishClient{
 		BaseURL:  baseURL,
 		Username: username,
@@ -492,13 +514,7 @@ func main() {
 	}
 
 	baseURL := fmt.Sprintf("https://%s", ip)
-	client := NewRedfishClient(baseURL, user, pass)
-
-	if *verbose {
-		// Go native http logging can be complex to match Python's simple setup,
-		// but for now we just acknowledge the flag.
-		fmt.Println("Verbose mode enabled")
-	}
+	client := NewRedfishClient(baseURL, user, pass, *verbose)
 
 	if _, err := client.Login(); err != nil {
 		fmt.Printf("Login failed: %v\n", err)

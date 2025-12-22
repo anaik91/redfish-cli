@@ -17,7 +17,7 @@ func TestGetPowerState(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewRedfishClient(server.URL, "user", "pass")
+	client := NewRedfishClient(server.URL, "user", "pass", false)
 	state, err := client.GetPowerState("1")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -41,7 +41,7 @@ func TestResetSystem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewRedfishClient(server.URL, "user", "pass")
+	client := NewRedfishClient(server.URL, "user", "pass", false)
 	_, err := client.ResetSystem("On", "1")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -57,7 +57,7 @@ func TestResetManager(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewRedfishClient(server.URL, "user", "pass")
+	client := NewRedfishClient(server.URL, "user", "pass", false)
 	_, err := client.ResetManager("ForceRestart", "1")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -77,7 +77,7 @@ func TestGetPostState(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewRedfishClient(server.URL, "user", "pass")
+	client := NewRedfishClient(server.URL, "user", "pass", false)
 	state, err := client.GetPostState("1")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
