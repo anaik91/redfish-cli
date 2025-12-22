@@ -8,25 +8,48 @@ import os
 
 try:
     import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
 except ImportError:
     print("Error: 'requests' module not found. Please install it using 'pip install requests'")
     sys.exit(1)
 
 
 class RedfishClient:
-    def __init__(self, base_url, username, password):
+    def __init__(self, base_url, username, password, verbose=False):
         self.base_url = base_url
         self.username = username
         self.password = password
         self.session = None
+        self.verbose = verbose
+
+    def _log_request(self, method, url, payload=None):
+        if self.verbose:
+            print(f"Request: {method} {url}")
+            if payload:
+                 print(f"Payload: {json.dumps(payload, indent=2)}")
 
     def login(self):
         try:
             self.session = requests.Session()
+            
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE", "POST"]
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
+            
             self.session.verify = False
             self.session.auth = (self.username, self.password)
             self.session.headers.update({"Content-Type": "application/json"})
-            response = self.session.get(f"{self.base_url}/redfish/v1/")
+            
+            url = f"{self.base_url}/redfish/v1/"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -48,7 +71,9 @@ class RedfishClient:
 
     def get_power_state(self, system_id="1"):
         try:
-            response = self.session.get(f"{self.base_url}/redfish/v1/Systems/{system_id}")
+            url = f"{self.base_url}/redfish/v1/Systems/{system_id}"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             return response.json().get('PowerState')
         except requests.exceptions.RequestException as e:
@@ -58,8 +83,10 @@ class RedfishClient:
     def reset_system(self, reset_type, system_id="1"):
         payload = {'ResetType': reset_type}
         try:
+            url = f"{self.base_url}/redfish/v1/Systems/{system_id}/Actions/ComputerSystem.Reset"
+            self._log_request("POST", url, payload)
             response = self.session.post(
-                f"{self.base_url}/redfish/v1/Systems/{system_id}/Actions/ComputerSystem.Reset",
+                url,
                 json=payload
             )
             response.raise_for_status()
@@ -93,8 +120,10 @@ class RedfishClient:
     def reset_manager(self, reset_type="ForceRestart", manager_id="1"):
         payload = {'ResetType': reset_type}
         try:
+            url = f"{self.base_url}/redfish/v1/Managers/{manager_id}/Actions/Manager.Reset"
+            self._log_request("POST", url, payload)
             response = self.session.post(
-                f"{self.base_url}/redfish/v1/Managers/{manager_id}/Actions/Manager.Reset",
+                url,
                 json=payload
             )
             response.raise_for_status()
@@ -107,8 +136,10 @@ class RedfishClient:
         try:
             # 1. Reset to Factory Defaults
             payload = {'ResetType': 'Default'}
+            url = f"{self.base_url}/redfish/v1/Managers/{manager_id}/Actions/Oem/Hpe/HpeiLO.ResetToFactoryDefaults/"
+            self._log_request("POST", url, payload)
             response = self.session.post(
-                f"{self.base_url}/redfish/v1/Managers/{manager_id}/Actions/Oem/Hpe/HpeiLO.ResetToFactoryDefaults/",
+                url,
                 json=payload
             )
             response.raise_for_status()
@@ -126,8 +157,10 @@ class RedfishClient:
             
             # 2. AuxCycle
             payload = {'ResetType': 'AuxCycle'}
+            url = f"{self.base_url}/redfish/v1/Systems/{system_id}/Actions/Oem/Hpe/HpeComputerSystemExt.SystemReset/"
+            self._log_request("POST", url, payload)
             response = self.session.post(
-                f"{self.base_url}/redfish/v1/Systems/{system_id}/Actions/Oem/Hpe/HpeComputerSystemExt.SystemReset/",
+                url,
                 json=payload
             )
             response.raise_for_status()
@@ -138,7 +171,9 @@ class RedfishClient:
 
     def get_post_state(self, system_id="1"):
         try:
-            response = self.session.get(f"{self.base_url}/redfish/v1/Systems/{system_id}")
+            url = f"{self.base_url}/redfish/v1/Systems/{system_id}"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             return response.json().get('Oem', {}).get('Hpe', {}).get('PostState')
         except requests.exceptions.RequestException as e:
@@ -147,7 +182,9 @@ class RedfishClient:
 
     def get_server_config_lock_settings(self, system_id="1"):
          try:
-            response = self.session.get(f"{self.base_url}/redfish/v1/systems/{system_id}/bios/oem/hpe/serverconfiglock/settings/")
+            url = f"{self.base_url}/redfish/v1/systems/{system_id}/bios/oem/hpe/serverconfiglock/settings/"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             return response.json()
          except requests.exceptions.RequestException as e:
@@ -157,8 +194,10 @@ class RedfishClient:
     def secure_erase(self, system_id="1"):
         try:
             payload = {'SystemROMAndiLOErase': True, 'UserDataErase': True}
+            url = f"{self.base_url}/redfish/v1/Systems/{system_id}/Actions/Oem/Hpe/HpeComputerSystemExt.SecureSystemErase"
+            self._log_request("POST", url, payload)
             response = self.session.post(
-                f"{self.base_url}/redfish/v1/Systems/{system_id}/Actions/Oem/Hpe/HpeComputerSystemExt.SecureSystemErase",
+                url,
                 json=payload
             )
             response.raise_for_status()
@@ -171,11 +210,15 @@ class RedfishClient:
 
     def get_secure_erase_status(self, system_id="1"):
         try:
-            response = self.session.get(f"{self.base_url}/redfish/v1/Systems/{system_id}")
+            url = f"{self.base_url}/redfish/v1/Systems/{system_id}"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             status = response.json().get('Oem', {}).get('Hpe', {}).get('SystemROMAndiLOEraseStatus')
             
-            report_response = self.session.get(f"{self.base_url}/redfish/v1/Systems/{system_id}/SecureEraseReportService/SecureEraseReportEntries")
+            url_report = f"{self.base_url}/redfish/v1/Systems/{system_id}/SecureEraseReportService/SecureEraseReportEntries"
+            self._log_request("GET", url_report)
+            report_response = self.session.get(url_report)
             report_response.raise_for_status()
             report = report_response.json()
             
@@ -186,7 +229,9 @@ class RedfishClient:
 
     def get_eskm_logs(self, manager_id="1"):
         try:
-            response = self.session.get(f"{self.base_url}/redfish/v1/Managers/{manager_id}/SecurityService/ESKM/")
+            url = f"{self.base_url}/redfish/v1/Managers/{manager_id}/SecurityService/ESKM/"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             # The curl command ends with | jq '.ESKMEvents[]' which implies returning the list
             return response.json().get('ESKMEvents', [])
@@ -196,8 +241,10 @@ class RedfishClient:
 
     def test_eskm_connection(self, manager_id="1"):
         try:
+            url = f"{self.base_url}/redfish/v1/Managers/{manager_id}/SecurityService/ESKM/Actions/HpeESKM.TestESKMConnections/"
+            self._log_request("POST", url)
             response = self.session.post(
-                f"{self.base_url}/redfish/v1/Managers/{manager_id}/SecurityService/ESKM/Actions/HpeESKM.TestESKMConnections/"
+                url
             )
             response.raise_for_status()
             return response.json() if response.content else True
@@ -207,7 +254,9 @@ class RedfishClient:
 
     def get_security_state(self, manager_id="1"):
         try:
-            response = self.session.get(f"{self.base_url}/redfish/v1/Managers/{manager_id}/SecurityService")
+            url = f"{self.base_url}/redfish/v1/Managers/{manager_id}/SecurityService"
+            self._log_request("GET", url)
+            response = self.session.get(url)
             response.raise_for_status()
             return response.json().get('SecurityState')
         except requests.exceptions.RequestException as e:
@@ -288,6 +337,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Redfish Client Utility")
     parser.add_argument("--server-name", help="Name of the server to connect to (via kubectl)")
     parser.add_argument("--list-servers", action="store_true", help="List available servers with IPs")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging of API calls")
     parser.add_argument("--action", help="Action to perform", choices=[
         "get_power_state", "reset_system", "power_on", "graceful_shutdown", "force_off", "force_restart",
         "wait_for_power_state", "reset_manager", "factory_reset", "aux_cycle", "get_post_state",
@@ -322,7 +372,7 @@ if __name__ == "__main__":
         requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
         
         base_url = f"https://{ip}"
-        client = RedfishClient(base_url, username, password)
+        client = RedfishClient(base_url, username, password, verbose=args.verbose)
         
         if client.login():
             try:
