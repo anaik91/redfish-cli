@@ -503,7 +503,11 @@ func main() {
 	serverName := flag.String("server-name", "", "Name of the server to connect to (via kubectl)")
 	listServersOpt := flag.Bool("list-servers", false, "List available servers with IPs")
 	verbose := flag.Bool("v", false, "Enable verbose logging of API calls (placeholder for future go-native logging)")
-	action := flag.String("action", "", "Action to perform: get_power_state, reset_system, power_on, graceful_shutdown, force_off, force_restart, wait_for_power_state, reset_manager, factory_reset, aux_cycle, get_post_state, secure_erase, get_secure_erase_status, get_eskm_logs, test_eskm_connection, get_security_state, get_server_config_lock_settings")
+	availableActions := "get_power_state, reset_system, power_on, graceful_shutdown, " +
+		"force_off, force_restart, wait_for_power_state, reset_manager, factory_reset, " +
+		"aux_cycle, get_post_state, secure_erase, get_secure_erase_status, get_eskm_logs, " +
+		"test_eskm_connection, get_security_state, get_server_config_lock_settings"
+	action := flag.String("action", "", "Action to perform: "+availableActions)
 	systemID := flag.String("system-id", "1", "System ID (default: 1)")
 	managerID := flag.String("manager-id", "1", "Manager ID (default: 1)")
 	resetType := flag.String("reset-type", "", "Reset Type for reset_system or reset_manager")
